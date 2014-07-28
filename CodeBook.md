@@ -250,7 +250,7 @@ For this course project the means and standard deviations of the following measu
 
 ----
   
-Unfortunately i do not really understand these measurements and how they were derived from the original sensor signals available in the dataset (but ignored for this project).
+Unfortunately i do not really understand these measurements and how they were derived from the original sensor signals available (but ignored) in the dataset.
   
 ----  
 

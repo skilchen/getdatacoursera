@@ -108,26 +108,36 @@ read_subjects <- function(base_dir) {
   return(subjects)
 }
 
-read_activities <- function(base_dir) {
-  #
+read_activity_labels <- function(base_dir) {
   # read the activity labels (activity_labels.txt) 
-  # and the merged activities (y.txt) and into 
-  # data.frames, so that the labels can be
+  # into a data.frame, so that the labels can be
+  # attached to the activity numbers using slicing
+  # return a data.frame with V1 = activity_number
+  # and V2 = activity_label
+  message(date(), " start read_activity_labels")
+  activity_labels <- read.table(file.path(base_dir, "activity_labels.txt"),
+                                header = FALSE, stringsAsFactors = FALSE)
+  message(date(), " end   read_activity_labels")
+  return(activity_labels)
+}
+
+read_activities <- function(base_dir, activity_labels) {
+  #
+  # read the merged activities (y.txt) and into 
+  # a data.frame, so that the labels can be
   # attached to the numbers using slicing.
   # return a data.frame with V1 = activity_number
   # and V2 = activity_label
   #
   message(date(), " start read_activities")
-  activity_labels <- read.table(file.path(base_dir, "activity_labels.txt"),
-                                header = FALSE, stringsAsFactors = FALSE)
   
   activities <- read.table(file.path(base_dir, "y.txt"),
                            header = FALSE, stringsAsFactors = FALSE)
   
-  labelled_activities <- activity_labels[activities$V1,]
+  labeled_activities <- activity_labels[activities$V1,]
   
   message(date(), " end   read_activities")
-  return(labelled_activities)
+  return(labeled_activities)
 }
 
 read_selected_features <- function(base_dir) {
@@ -187,12 +197,13 @@ process_data <- function(base_dir, subjects, activities, selected_features, outp
   message(date(), " end   process_data")
 }
 
-write_aggregate_data <- function(input_file="tidy_data_all.txt", 
+write_aggregate_data <- function(activity_labels,
+                                 input_file="tidy_data_all.txt", 
                                  output_dir=".", 
                                  output_file="tidy_data_per_activity_and_subject.txt") {
   #
-  # takes the input_file produced by process_data and
-  # in output_dir writes a new file output_file
+  # takes the activity_labels, the input_file produced 
+  # by process_data and writes output_file into output_dir
   # with averages aggregated per activity and subject
   # 
   # returns the aggregated data.frame
@@ -201,18 +212,24 @@ write_aggregate_data <- function(input_file="tidy_data_all.txt",
   
   df <- read.table(input_file, header=TRUE, sep=FIELD_SEPARATOR)
   df$Subject <- as.factor(df$Subject)
+  
+  df$Activity <- factor(df$Activity, levels=activity_labels$V2)
+  
   aggregated <- aggregate(df[,3:ncol(df)], 
                           by = list(Activity = df$Activity, Subject = df$Subject),
                           FUN = mean)
   
   outputfile <- file.path(output_dir, output_file)
+  message("outputfile: ", outputfile)
   write.table(aggregated, file=outputfile, sep=FIELD_SEPARATOR, row.names=FALSE)
   
   message(date(), " end   write_aggregate_data")
   return(aggregated)
 }
   
-run_analysis <- function(base_dir, merge_dir="merged", output_file="tidy_data.txt") {
+run_analysis <- function(base_dir, merge_dir="merged", 
+                         output_file_1="tidy_data_all.txt",
+                         output_file_2="tidy_data.txt") {
   # 
   # call the processing steps defined above
   # it looks in base_dir for the UCI HAR data
@@ -226,15 +243,14 @@ run_analysis <- function(base_dir, merge_dir="merged", output_file="tidy_data.tx
   
   subjects <- read_subjects(merge_dir)
   
-  labelled_activities <- read_activities(merge_dir)
+  activity_labels <- read_activity_labels(merge_dir)
+  labeled_activities <- read_activities(merge_dir, activity_labels)
   
   selected_features <- read_selected_features(merge_dir)
   
-  temp_file <- tempfile("tidy_data",fileext=".txt")
-  process_data(merge_dir, subjects, labelled_activities, selected_features, temp_file)
- 
-  aggregated = write_aggregate_data(temp_file, merge_dir, output_file)
-  unlink(temp_file)
+  process_data(merge_dir, subjects, labeled_activities, selected_features, output_file_1)
+  
+  aggregated = write_aggregate_data(activity_labels, output_file_1, ".", output_file_2)
   
   message(date(), " end   run_analysis")
   return(aggregated)
@@ -268,11 +284,13 @@ main <- function(download=FALSE) {
   if (!download) {
     message("searching data in ", base_dir)
   }
+
+  # the name of the output_file with all tidy data
+  output_file_1 <- "tidy_data_all.txt"
   
-  # the name you want to give to the output_file.
-  # it will be stored in your current working directory.
-  output_file <- "tidy_data_per_activity_and_subject.txt"
-  message("writing output to ./", output_file)  
+  # the name of to the output_file with the data
+  # aggregated by activity and subject.
+  output_file_2 <- "tidy_data_per_activity_and_subject.txt"
   
   if (download) {
     base_dir <- file.path(download_dir, "UCI HAR Dataset")
@@ -280,7 +298,10 @@ main <- function(download=FALSE) {
     message("searching data in ", base_dir)
   }
   
-  aggregated <- run_analysis(base_dir, output_file=output_file)
+  aggregated <- run_analysis(base_dir=base_dir, 
+                             merge_dir="merged",
+                             output_file_1=output_file_1,
+                             output_file_2=output_file_2)
   # do whatever you would like with the aggregated data
   # e.g. summary(aggregated)
   # for now we are only interested in the written output_file
